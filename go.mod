@@ -1,4 +1,4 @@
-module test1
+module ucloud-exporter
 
 go 1.18
 

@@ -12,10 +12,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
-	"test1/collector"
-	"test1/exporter"
 	"time"
+	"ucloud-exporter/collector"
+	"ucloud-exporter/exporter"
+)
+
+const (
+	cfgUrl = "https://api.ucloud.cn"
 )
 
 func main() {
@@ -24,19 +27,16 @@ func main() {
 	projectid := flag.String("projectId", os.Getenv("ucloud_project_id"), "confirm the project")
 	host := flag.String("host", "0.0.0.0", "服务监听地址")
 	port := flag.Int("port", 9200, "服务监听端口")
-	service := flag.String("service", "acs_cdn", "输出Metrics的服务，默认为全部")
 	rangeTime := flag.Int64("rangeTime", 3000, "rangeTime")
 	delayTime := flag.Int64("delayTime", 60, "delayTime")
 	tickerTime := flag.Int("tickerTime", 10, "tickerTime")
 	flag.Parse()
-	serviceArr := strings.Split(*service, ",")
 	cfg := ucloud.NewConfig()
-	cfg.BaseUrl = "https://api.ucloud.cn"
+	cfg.BaseUrl = cfgUrl
 
 	cred := auth.NewCredential()
 	cred.PublicKey = *publicKey
 	cred.PrivateKey = *privateKey
-	//var projectId string
 	projectId := *projectid
 
 	uCdnClient := ucdn.NewClient(&cfg, &cred)
@@ -63,16 +63,10 @@ func main() {
 			}
 		}
 	}()
-	*infoCount = 3
-	for _, ae := range serviceArr {
-		switch ae {
-		case "acs_cdn":
-			cdn := exporter.CdnCloudExporter(infoCount, infoList, projectId, *rangeTime, *delayTime, uCdnClient)
-			prometheus.MustRegister(cdn)
-		default:
-			log.Println("暂不支持该服务，请根据提示选择服务。")
-		}
-	}
+
+	cdn := exporter.CdnCloudExporter(infoList, projectId, *rangeTime, *delayTime, uCdnClient)
+	prometheus.MustRegister(cdn)
+
 	listenAddress := net.JoinHostPort(*host, strconv.Itoa(*port))
 	log.Println(listenAddress)
 	log.Println("Running on", listenAddress)
@@ -80,3 +74,4 @@ func main() {
 	log.Fatal(http.ListenAndServe(listenAddress, nil))
 
 }
+

@@ -12,7 +12,6 @@ const cdnNameSpace = "uCloud"
 
 type CdnExporter struct {
 	client               *ucdn.UCDNClient
-	infoCount            *int
 	infoList             [20]*string
 	rangeTime            int64
 	delayTime            int64
@@ -25,11 +24,10 @@ type CdnExporter struct {
 	cdn95bandwidth       *prometheus.Desc
 }
 
-func CdnCloudExporter(infoCount *int, infoList [20]*string, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
+func CdnCloudExporter(infoList [20]*string, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
 	return &CdnExporter{
 		client:    c,
 		infoList:  infoList,
-		infoCount: infoCount,
 		rangeTime: rangeTime,
 		delayTime: delayTime,
 		projectId: projectId,
@@ -99,6 +97,8 @@ func (e *CdnExporter) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
+	var infoCount int
+	infoCount = collector.RetrieveInfoList(e.projectId, e.client).TotalCount
 
 	var requestHitRateData float64
 	var requestHitRateCount float64
@@ -106,46 +106,50 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 	var flowHitRateData float64
 	var flowHitRateCount float64
 	var flowHitRateAverage float64
-	for _, point := range collector.RetrieveHitRate(e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList {
+
+	hitRateList := collector.RetrieveHitRate(e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
+	flowHitRateCount = float64(len(hitRateList))
+	requestHitRateCount = float64(len(hitRateList))
+
+	for _, point := range hitRateList {
 		flowHitRateData += point.FlowHitRate
-		flowHitRateCount++
-		flowHitRateAverage = flowHitRateData / flowHitRateCount
-		flowHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateAverage), 64)
 		requestHitRateData += point.RequestHitRate
-		requestHitRateCount++
-		requestHitRateAverage = requestHitRateData / requestHitRateCount
-		requestHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateAverage), 64)
 	}
+	flowHitRateAverage = flowHitRateData / flowHitRateCount
+	flowHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateAverage), 64)
+	requestHitRateAverage = requestHitRateData / requestHitRateCount
+	requestHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateAverage), 64)
 
 	var bandWidthData float64
 	var bandWidthCount float64
 	var bandWidthAverage float64
+	bandWidthList := collector.RetrieveBandWidth(e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList
+	bandWidthCount = float64(len(bandWidthList))
 
-	for _, point := range collector.RetrieveBandWidth(e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList {
+	for _, point := range bandWidthList {
 		bandWidthData += point.CdnBandwidth
-		bandWidthCount++
-		bandWidthAverage = bandWidthData / bandWidthCount
-		bandWidthAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthAverage), 64)
 	}
 
+	bandWidthAverage = bandWidthData / bandWidthCount
+	bandWidthAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthAverage), 64)
+
+	var httpCount int
 	var http4xxData int
-	var http4xxCount int
 	var http4xxAverage int
 	var http5xxData int
-	var http5xxCount int
 	var http5xxAverage int
 
-	for _, point := range collector.RetrieveOriginHttpCode4xx(e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail {
+	httpList := collector.RetrieveOriginHttpCode4xx(e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
+	httpCount = len(httpList)
+
+	for _, point := range httpList {
 		http4xxData += point.Http4XX.Total
-		http4xxCount++
-		http4xxAverage = http4xxData / http4xxCount
 		http5xxData += point.Http5XX.Total
-		http5xxCount++
-		http5xxAverage = http5xxData / http5xxCount
 	}
-	
-	
-	for i := 0; i < *e.infoCount; i++ {
+	http4xxAverage = http4xxData / httpCount
+	http5xxAverage = http5xxData / httpCount
+
+	for i := 0; i < infoCount; i++ {
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnRequestHitRate,
 			prometheus.GaugeValue,
