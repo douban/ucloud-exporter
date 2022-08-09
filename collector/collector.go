@@ -18,6 +18,7 @@ func RetrieveHitRate(projectId string, rangeTime int64, delayTime int64, client 
 	newUCdnHitRate, err := client.GetUcdnDomainHitRate(req)
 	if err != nil {
 		log.Println(err)
+		return
 	}
 	return newUCdnHitRate
 }
@@ -33,6 +34,7 @@ func RetrieveBandWidth(projectId string, rangeTime int64, delayTime int64, clien
 	newUCdnBandWidth, err := client.GetNewUcdnDomainBandwidth(req)
 	if err != nil {
 		log.Println(err)
+		return
 	}
 
 	return newUCdnBandWidth
@@ -50,6 +52,7 @@ func RetrieveOriginHttpCode4xx(projectId string, rangeTime int64, delayTime int6
 
 	if err != nil {
 		log.Println(err)
+		return
 	}
 
 	return newUCdnRequestNum
@@ -67,6 +70,7 @@ func RetrieveOriginHttpCode5xx(projectId string, rangeTime int64, delayTime int6
 
 	if err != nil {
 		log.Println(err)
+		return
 	}
 
 	return newUCdnRequestNum
@@ -83,6 +87,7 @@ func Retrieve95BandWidth(projectId string, rangeTime int64, delayTime int64, cli
 
 	if err != nil {
 		log.Println(err)
+		return
 	}
 
 	return newUCdn95BandWidth
@@ -96,7 +101,9 @@ func RetrieveInfoList(projectId string, client *ucdn.UCDNClient) (response *ucdn
 
 	if err != nil {
 		log.Println(err)
+		return
 	}
 
 	return newUCdnInfoList
 }
+
