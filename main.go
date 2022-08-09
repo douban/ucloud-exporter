@@ -59,12 +59,11 @@ func main() {
 				for i := 0; i < *infoCount; i++ {
 					infoList[i] = &collector.RetrieveInfoList(projectId, uCdnClient).DomainInfoList[i].Domain
 				}
-				log.Println(*infoCount, time.Now())
 			}
 		}
 	}()
 
-	cdn := exporter.CdnCloudExporter(infoList, projectId, *rangeTime, *delayTime, uCdnClient)
+	cdn := exporter.CdnCloudExporter(infoCount, infoList, projectId, *rangeTime, *delayTime, uCdnClient)
 	prometheus.MustRegister(cdn)
 
 	listenAddress := net.JoinHostPort(*host, strconv.Itoa(*port))

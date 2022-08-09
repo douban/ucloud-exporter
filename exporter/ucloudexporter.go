@@ -12,6 +12,7 @@ const cdnNameSpace = "uCloud"
 
 type CdnExporter struct {
 	client               *ucdn.UCDNClient
+	infoCount            *int
 	infoList             [20]*string
 	rangeTime            int64
 	delayTime            int64
@@ -24,10 +25,11 @@ type CdnExporter struct {
 	cdn95bandwidth       *prometheus.Desc
 }
 
-func CdnCloudExporter(infoList [20]*string, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
+func CdnCloudExporter(infoCount *int, infoList [20]*string, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
 	return &CdnExporter{
 		client:    c,
 		infoList:  infoList,
+		infoCount: infoCount,
 		rangeTime: rangeTime,
 		delayTime: delayTime,
 		projectId: projectId,
@@ -97,8 +99,6 @@ func (e *CdnExporter) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
-	var infoCount int
-	infoCount = collector.RetrieveInfoList(e.projectId, e.client).TotalCount
 
 	var requestHitRateData float64
 	var requestHitRateCount float64
@@ -149,7 +149,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 	http4xxAverage = http4xxData / httpCount
 	http5xxAverage = http5xxData / httpCount
 
-	for i := 0; i < infoCount; i++ {
+	for i := 0; i < *e.infoCount; i++ {
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnRequestHitRate,
 			prometheus.GaugeValue,
