@@ -131,22 +131,19 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 	var http4xxData int
 	var http4xxCount int
 	var http4xxAverage int
+	var http5xxData int
+	var http5xxCount int
+	var http5xxAverage int
 
 	for _, point := range collector.RetrieveOriginHttpCode4xx(e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail {
 		http4xxData += point.Http4XX.Total
 		http4xxCount++
 		http4xxAverage = http4xxData / http4xxCount
-	}
-
-	var http5xxData int
-	var http5xxCount int
-	var http5xxAverage int
-
-	for _, point := range collector.RetrieveOriginHttpCode5xx(e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail {
 		http5xxData += point.Http5XX.Total
 		http5xxCount++
 		http5xxAverage = http5xxData / http5xxCount
 	}
+	
 	
 	for i := 0; i < *e.infoCount; i++ {
 		ch <- prometheus.MustNewConstMetric(
