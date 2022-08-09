@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/ucloud/ucloud-sdk-go/services/ucdn"
-	"log"
 	"strconv"
-	"test1/collector"
+	"ucloud-exporter/collector"
 )
 
 const cdnNameSpace = "uCloud"
@@ -101,25 +100,21 @@ func (e *CdnExporter) Describe(ch chan<- *prometheus.Desc) {
 
 func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 
-	log.Println(*e.infoCount)
-	*e.infoCount = 1
 	var requestHitRateData float64
 	var requestHitRateCount float64
 	var requestHitRateAverage float64
+	var flowHitRateData float64
+	var flowHitRateCount float64
+	var flowHitRateAverage float64
 	for _, point := range collector.RetrieveHitRate(e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList {
+		flowHitRateData += point.FlowHitRate
+		flowHitRateCount++
+		flowHitRateAverage = flowHitRateData / flowHitRateCount
+		flowHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateAverage), 64)
 		requestHitRateData += point.RequestHitRate
 		requestHitRateCount++
 		requestHitRateAverage = requestHitRateData / requestHitRateCount
 		requestHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateAverage), 64)
-	}
-
-	for i := 0; i < *e.infoCount; i++ {
-		ch <- prometheus.MustNewConstMetric(
-			e.cdnRequestHitRate,
-			prometheus.GaugeValue,
-			requestHitRateAverage,
-			*e.infoList[i],
-		)
 	}
 
 	var bandWidthData float64
@@ -133,15 +128,6 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		bandWidthAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthAverage), 64)
 	}
 
-	for i := 0; i < *e.infoCount; i++ {
-		ch <- prometheus.MustNewConstMetric(
-			e.cdnBandWidth,
-			prometheus.GaugeValue,
-			bandWidthAverage,
-			*e.infoList[i],
-		)
-	}
-
 	var http4xxData int
 	var http4xxCount int
 	var http4xxAverage int
@@ -150,15 +136,6 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		http4xxData += point.Http4XX.Total
 		http4xxCount++
 		http4xxAverage = http4xxData / http4xxCount
-	}
-
-	for i := 0; i < *e.infoCount; i++ {
-		ch <- prometheus.MustNewConstMetric(
-			e.cdnOriginHttpCode4xx,
-			prometheus.GaugeValue,
-			float64(http4xxAverage),
-			*e.infoList[i],
-		)
 	}
 
 	var http5xxData int
@@ -170,45 +147,50 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		http5xxCount++
 		http5xxAverage = http5xxData / http5xxCount
 	}
-
+	
 	for i := 0; i < *e.infoCount; i++ {
+		ch <- prometheus.MustNewConstMetric(
+			e.cdnRequestHitRate,
+			prometheus.GaugeValue,
+			requestHitRateAverage,
+			*e.infoList[i],
+		)
+
+		ch <- prometheus.MustNewConstMetric(
+			e.cdnBandWidth,
+			prometheus.GaugeValue,
+			bandWidthAverage,
+			*e.infoList[i],
+		)
+
+		ch <- prometheus.MustNewConstMetric(
+			e.cdnOriginHttpCode4xx,
+			prometheus.GaugeValue,
+			float64(http4xxAverage),
+			*e.infoList[i],
+		)
+
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnOriginHttpCode5xx,
 			prometheus.GaugeValue,
 			float64(http5xxAverage),
 			*e.infoList[i],
 		)
-	}
 
-	for i := 0; i < *e.infoCount; i++ {
 		ch <- prometheus.MustNewConstMetric(
 			e.cdn95bandwidth,
 			prometheus.GaugeValue,
 			collector.Retrieve95BandWidth(e.projectId, e.rangeTime, e.delayTime, e.client).CdnBandwidth,
 			*e.infoList[i],
 		)
-	}
 
-	var flowHitRateData float64
-	var flowHitRateCount float64
-	var flowHitRateAverage float64
-	for _, point := range collector.RetrieveHitRate(e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList {
-		flowHitRateData += point.FlowHitRate
-		flowHitRateCount++
-		flowHitRateAverage = flowHitRateData / flowHitRateCount
-		flowHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateAverage), 64)
-	}
-
-	for i := 0; i < *e.infoCount; i++ {
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnFlowHitRate,
 			prometheus.GaugeValue,
 			flowHitRateAverage,
 			*e.infoList[i],
 		)
-
 	}
 
-	//	*e.infoCount = 10
-	//	log.Println(*e.infoCount)
 }
+
