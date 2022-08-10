@@ -18,8 +18,16 @@ import (
 )
 
 const (
-	cfgUrl = "https://api.ucloud.cn"
+	CONFIG_URL = "https://api.ucloud.cn"
 )
+
+var (
+	domainList []ucdn.DomainBaseInfo
+)
+
+func FetchDomainList(projectID string, client *ucdn.UCDNClient) {
+	domainList = collector.RetrieveInfoList(projectID, client).DomainInfoList
+}
 
 func main() {
 	publicKey := flag.String("pubkey", os.Getenv("UCLOUD_PUB_KEY"), "ucloud api public key")
@@ -32,7 +40,7 @@ func main() {
 	tickerTime := flag.Int("tickerTime", 10, "tickerTime")
 	flag.Parse()
 	cfg := ucloud.NewConfig()
-	cfg.BaseUrl = cfgUrl
+	cfg.BaseUrl = CONFIG_URL
 
 	cred := auth.NewCredential()
 	cred.PublicKey = *publicKey
@@ -40,13 +48,7 @@ func main() {
 	projectId := *projectid
 
 	uCdnClient := ucdn.NewClient(&cfg, &cred)
-	var infoCount *int
-	var infoList [20]*string
-	infoCount = &collector.RetrieveInfoList(projectId, uCdnClient).TotalCount
-	for i := 0; i < *infoCount; i++ {
-		infoList[i] = &collector.RetrieveInfoList(projectId, uCdnClient).DomainInfoList[i].Domain
-	}
-
+	FetchDomainList(projectId, uCdnClient)
 	ticker := time.NewTicker(time.Duration(*tickerTime) * time.Second)
 	done := make(chan bool)
 	go func() {
@@ -55,15 +57,12 @@ func main() {
 			case <-done:
 				return
 			case <-ticker.C:
-				infoCount = &collector.RetrieveInfoList(projectId, uCdnClient).TotalCount
-				for i := 0; i < *infoCount; i++ {
-					infoList[i] = &collector.RetrieveInfoList(projectId, uCdnClient).DomainInfoList[i].Domain
-				}
+				FetchDomainList(projectId, uCdnClient)
 			}
 		}
 	}()
 
-	cdn := exporter.CdnCloudExporter(infoCount, infoList, projectId, *rangeTime, *delayTime, uCdnClient)
+	cdn := exporter.CdnCloudExporter(&domainList, projectId, *rangeTime, *delayTime, uCdnClient)
 	prometheus.MustRegister(cdn)
 
 	listenAddress := net.JoinHostPort(*host, strconv.Itoa(*port))

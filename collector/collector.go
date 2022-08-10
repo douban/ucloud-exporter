@@ -7,8 +7,11 @@ import (
 	"time"
 )
 
-func RetrieveHitRate(projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainHitRateResponse) {
+func RetrieveHitRate(domainId string, projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainHitRateResponse) {
 	req := client.NewGetUcdnDomainHitRateRequest()
+	req.DomainId = []string{
+		domainId,
+	}
 	req.ProjectId = ucloud.String(projectId)
 	req.Type = ucloud.Int(0)
 	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
@@ -17,15 +20,17 @@ func RetrieveHitRate(projectId string, rangeTime int64, delayTime int64, client 
 
 	newUCdnHitRate, err := client.GetUcdnDomainHitRate(req)
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
 	}
 	return newUCdnHitRate
 }
 
-func RetrieveBandWidth(projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetNewUcdnDomainBandwidthResponse) {
+func RetrieveBandWidth(domainId string, projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetNewUcdnDomainBandwidthResponse) {
 	req := client.NewGetNewUcdnDomainBandwidthRequest()
 	req.ProjectId = ucloud.String(projectId)
+	req.DomainId = []string{
+		domainId,
+	}
 	req.Type = ucloud.Int(3)
 	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
 	req.EndTime = ucloud.Int(int(time.Now().Unix() - delayTime))
@@ -33,15 +38,17 @@ func RetrieveBandWidth(projectId string, rangeTime int64, delayTime int64, clien
 
 	newUCdnBandWidth, err := client.GetNewUcdnDomainBandwidth(req)
 	if err != nil {
-		log.Println(err)
-		return
+		panic(err)
 	}
 
 	return newUCdnBandWidth
 }
 
-func RetrieveOriginHttpCode4xx(projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainHttpCodeV2Response) {
+func RetrieveOriginHttpCode4xx(domainId string, projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainHttpCodeV2Response) {
 	req := client.NewGetUcdnDomainHttpCodeV2Request()
+	req.DomainId = []string{
+		domainId,
+	}
 	req.ProjectId = ucloud.String(projectId)
 	req.Type = ucloud.Int(0)
 	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
@@ -51,33 +58,17 @@ func RetrieveOriginHttpCode4xx(projectId string, rangeTime int64, delayTime int6
 	newUCdnRequestNum, err := client.GetUcdnDomainHttpCodeV2(req)
 
 	if err != nil {
-		log.Println(err)
-		return
+		panic(err)
 	}
 
 	return newUCdnRequestNum
 }
 
-func RetrieveOriginHttpCode5xx(projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainHttpCodeV2Response) {
-	req := client.NewGetUcdnDomainHttpCodeV2Request()
-	req.ProjectId = ucloud.String(projectId)
-	req.Type = ucloud.Int(0)
-	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
-	req.EndTime = ucloud.Int(int(time.Now().Unix() - delayTime))
-	req.Areacode = ucloud.String("cn")
-
-	newUCdnRequestNum, err := client.GetUcdnDomainHttpCodeV2(req)
-
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	return newUCdnRequestNum
-}
-
-func Retrieve95BandWidth(projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomain95BandwidthV2Response) {
+func Retrieve95BandWidth(domainId string, projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomain95BandwidthV2Response) {
 	req := client.NewGetUcdnDomain95BandwidthV2Request()
+	req.DomainId = []string{
+		domainId,
+	}
 	req.ProjectId = ucloud.String(projectId)
 	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
 	req.EndTime = ucloud.Int(int(time.Now().Unix() - delayTime))
@@ -86,8 +77,7 @@ func Retrieve95BandWidth(projectId string, rangeTime int64, delayTime int64, cli
 	newUCdn95BandWidth, err := client.GetUcdnDomain95BandwidthV2(req)
 
 	if err != nil {
-		log.Println(err)
-		return
+		panic(err)
 	}
 
 	return newUCdn95BandWidth
@@ -96,14 +86,11 @@ func Retrieve95BandWidth(projectId string, rangeTime int64, delayTime int64, cli
 func RetrieveInfoList(projectId string, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainInfoListResponse) {
 	req := client.NewGetUcdnDomainInfoListRequest()
 	req.ProjectId = ucloud.String(projectId)
-
 	newUCdnInfoList, err := client.GetUcdnDomainInfoList(req)
 
 	if err != nil {
-		log.Println(err)
-		return
+		panic(err)
 	}
 
 	return newUCdnInfoList
 }
-

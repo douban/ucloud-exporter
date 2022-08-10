@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/ucloud/ucloud-sdk-go/services/ucdn"
+	"log"
 	"strconv"
 	"ucloud-exporter/collector"
 )
@@ -12,8 +13,7 @@ const cdnNameSpace = "uCloud"
 
 type CdnExporter struct {
 	client               *ucdn.UCDNClient
-	infoCount            *int
-	infoList             [20]*string
+	domainList           *[]ucdn.DomainBaseInfo
 	rangeTime            int64
 	delayTime            int64
 	projectId            string
@@ -25,14 +25,13 @@ type CdnExporter struct {
 	cdn95bandwidth       *prometheus.Desc
 }
 
-func CdnCloudExporter(infoCount *int, infoList [20]*string, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
+func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
 	return &CdnExporter{
-		client:    c,
-		infoList:  infoList,
-		infoCount: infoCount,
-		rangeTime: rangeTime,
-		delayTime: delayTime,
-		projectId: projectId,
+		client:     c,
+		domainList: domainList,
+		rangeTime:  rangeTime,
+		delayTime:  delayTime,
+		projectId:  projectId,
 		cdnRequestHitRate: prometheus.NewDesc(
 			prometheus.BuildFQName(cdnNameSpace, "cdn", "request_hit_rate"),
 			"总请求命中率(%)",
@@ -100,96 +99,87 @@ func (e *CdnExporter) Describe(ch chan<- *prometheus.Desc) {
 
 func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 
-	var requestHitRateData float64
-	var requestHitRateCount float64
-	var requestHitRateAverage float64
-	var flowHitRateData float64
-	var flowHitRateCount float64
-	var flowHitRateAverage float64
+	for _, domain := range *e.domainList {
 
-	hitRateList := collector.RetrieveHitRate(e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
-	flowHitRateCount = float64(len(hitRateList))
-	requestHitRateCount = float64(len(hitRateList))
+		var requestHitRateData float64
+		var flowHitRateData float64
+		var bandWidthData float64
+		var bandWidthAverage float64
+		var http4xxData int
+		var http5xxData int
+		var http4xxAverage int
+		var http5xxAverage int
 
-	for _, point := range hitRateList {
-		flowHitRateData += point.FlowHitRate
-		requestHitRateData += point.RequestHitRate
-	}
-	flowHitRateAverage = flowHitRateData / flowHitRateCount
-	flowHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateAverage), 64)
-	requestHitRateAverage = requestHitRateData / requestHitRateCount
-	requestHitRateAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateAverage), 64)
+		hitRateList := collector.RetrieveHitRate(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
+		for _, point := range hitRateList {
+			flowHitRateData += point.FlowHitRate
+			requestHitRateData += point.RequestHitRate
+		}
+		flowHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateData/float64(len(hitRateList))), 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+		requestHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateData/float64(len(hitRateList))), 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+		bandWidthList := collector.RetrieveBandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList
+		for _, point := range bandWidthList {
+			bandWidthData += point.CdnBandwidth
+		}
+		bandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthData/float64(len(bandWidthList))), 64)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	var bandWidthData float64
-	var bandWidthCount float64
-	var bandWidthAverage float64
-	bandWidthList := collector.RetrieveBandWidth(e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList
-	bandWidthCount = float64(len(bandWidthList))
+		httpList := collector.RetrieveOriginHttpCode4xx(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
+		for _, point := range httpList {
+			http4xxData += point.Http4XX.Total
+			http5xxData += point.Http5XX.Total
+		}
+		http4xxAverage = http4xxData / len(httpList)
+		http5xxAverage = http5xxData / len(httpList)
 
-	for _, point := range bandWidthList {
-		bandWidthData += point.CdnBandwidth
-	}
-
-	bandWidthAverage = bandWidthData / bandWidthCount
-	bandWidthAverage, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthAverage), 64)
-
-	var httpCount int
-	var http4xxData int
-	var http4xxAverage int
-	var http5xxData int
-	var http5xxAverage int
-
-	httpList := collector.RetrieveOriginHttpCode4xx(e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
-	httpCount = len(httpList)
-
-	for _, point := range httpList {
-		http4xxData += point.Http4XX.Total
-		http5xxData += point.Http5XX.Total
-	}
-	http4xxAverage = http4xxData / httpCount
-	http5xxAverage = http5xxData / httpCount
-
-	for i := 0; i < *e.infoCount; i++ {
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnRequestHitRate,
 			prometheus.GaugeValue,
 			requestHitRateAverage,
-			*e.infoList[i],
+			domain.Domain,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnBandWidth,
 			prometheus.GaugeValue,
 			bandWidthAverage,
-			*e.infoList[i],
+			domain.Domain,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnOriginHttpCode4xx,
 			prometheus.GaugeValue,
 			float64(http4xxAverage),
-			*e.infoList[i],
+			domain.Domain,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnOriginHttpCode5xx,
 			prometheus.GaugeValue,
 			float64(http5xxAverage),
-			*e.infoList[i],
+			domain.Domain,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdn95bandwidth,
 			prometheus.GaugeValue,
-			collector.Retrieve95BandWidth(e.projectId, e.rangeTime, e.delayTime, e.client).CdnBandwidth,
-			*e.infoList[i],
+			collector.Retrieve95BandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).CdnBandwidth,
+			domain.Domain,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnFlowHitRate,
 			prometheus.GaugeValue,
 			flowHitRateAverage,
-			*e.infoList[i],
+			domain.Domain,
 		)
 	}
 
