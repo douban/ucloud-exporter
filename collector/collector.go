@@ -38,7 +38,7 @@ func RetrieveBandWidth(domainId string, projectId string, rangeTime int64, delay
 
 	newUCdnBandWidth, err := client.GetNewUcdnDomainBandwidth(req)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	return newUCdnBandWidth
@@ -58,7 +58,7 @@ func RetrieveOriginHttpCode4xx(domainId string, projectId string, rangeTime int6
 	newUCdnRequestNum, err := client.GetUcdnDomainHttpCodeV2(req)
 
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	return newUCdnRequestNum
@@ -77,7 +77,7 @@ func Retrieve95BandWidth(domainId string, projectId string, rangeTime int64, del
 	newUCdn95BandWidth, err := client.GetUcdnDomain95BandwidthV2(req)
 
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	return newUCdn95BandWidth
@@ -89,7 +89,7 @@ func RetrieveInfoList(projectId string, client *ucdn.UCDNClient) (response *ucdn
 	newUCdnInfoList, err := client.GetUcdnDomainInfoList(req)
 
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	return newUCdnInfoList
