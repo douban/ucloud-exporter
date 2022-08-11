@@ -101,44 +101,44 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 
 	for _, domain := range *e.domainList {
 
-		var requestHitRateData float64
-		var flowHitRateData float64
-		var bandWidthData float64
+		var requestHitRateSum float64
+		var flowHitRateSum float64
+		var bandWidthSum float64
 		var bandWidthAverage float64
-		var http4xxData int
-		var http5xxData int
+		var http4xxSum int
+		var http5xxSum int
 		var http4xxAverage int
 		var http5xxAverage int
 
-		hitRateList := collector.RetrieveHitRate(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
-		for _, point := range hitRateList {
-			flowHitRateData += point.FlowHitRate
-			requestHitRateData += point.RequestHitRate
+		hitRateData := collector.RetrieveHitRate(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
+		for _, point := range hitRateData {
+			flowHitRateSum += point.FlowHitRate
+			requestHitRateSum += point.RequestHitRate
 		}
-		flowHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateData/float64(len(hitRateList))), 64)
+		flowHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateSum/float64(len(hitRateData))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
-		requestHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateData/float64(len(hitRateList))), 64)
+		requestHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateSum/float64(len(hitRateData))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
-		bandWidthList := collector.RetrieveBandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList
-		for _, point := range bandWidthList {
-			bandWidthData += point.CdnBandwidth
+		bandWidthData := collector.RetrieveBandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList
+		for _, point := range bandWidthData {
+			bandWidthSum += point.CdnBandwidth
 		}
-		bandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthData/float64(len(bandWidthList))), 64)
+		bandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthSum/float64(len(bandWidthData))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		httpList := collector.RetrieveOriginHttpCode4xx(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
-		for _, point := range httpList {
-			http4xxData += point.Http4XX.Total
-			http5xxData += point.Http5XX.Total
+		httpData := collector.RetrieveOriginHttpCode4xx(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
+		for _, point := range httpData {
+			http4xxSum += point.Http4XX.Total
+			http5xxSum += point.Http5XX.Total
 		}
-		http4xxAverage = http4xxData / len(httpList)
-		http5xxAverage = http5xxData / len(httpList)
+		http4xxAverage = http4xxSum / len(httpData)
+		http5xxAverage = http5xxSum / len(httpData)
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnRequestHitRate,
