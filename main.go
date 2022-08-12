@@ -27,6 +27,9 @@ var (
 
 func FetchDomainList(projectID string, client *ucdn.UCDNClient) {
 	domainList = collector.RetrieveInfoList(projectID, client).DomainInfoList
+	if len(domainList) == 0{
+		log.Fatal("domainList is empty")
+	}
 }
 
 func main() {
