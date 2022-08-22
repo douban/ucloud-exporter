@@ -27,9 +27,10 @@ var (
 
 func FetchDomainList(projectID string, client *ucdn.UCDNClient) {
 	domainList = collector.RetrieveInfoList(projectID, client).DomainInfoList
-	if len(domainList) == 0{
+	if len(domainList) == 0 {
 		log.Fatal("domainList is empty")
 	}
+
 }
 
 func main() {
@@ -37,10 +38,10 @@ func main() {
 	privateKey := flag.String("privatekey", os.Getenv("UCLOUD_PRIVATE_KEY"), "ucloud api private key")
 	projectid := flag.String("projectId", os.Getenv("ucloud_project_id"), "confirm the project")
 	host := flag.String("host", "0.0.0.0", "服务监听地址")
-	port := flag.Int("port", 9200, "服务监听端口")
-	rangeTime := flag.Int64("rangeTime", 3000, "rangeTime")
-	delayTime := flag.Int64("delayTime", 60, "delayTime")
-	tickerTime := flag.Int("tickerTime", 10, "tickerTime")
+	port := flag.Int("port", 9300, "服务监听端口")
+	delayTime := flag.Int64("delayTime", 60, "时间偏移量, 结束时间=now-delay_seconds")
+	rangeTime := flag.Int64("rangeTime", 3000, "选取时间范围, 开始时间=now-range_seconds, 结束时间=now")
+	tickerTime := flag.Int("tickerTime", 10,  "刷新域名列表间隔时间")
 	flag.Parse()
 	cfg := ucloud.NewConfig()
 	cfg.BaseUrl = CONFIG_URL
