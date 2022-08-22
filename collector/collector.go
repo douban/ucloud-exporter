@@ -13,7 +13,9 @@ func RetrieveHitRate(domainId string, projectId string, rangeTime int64, delayTi
 		domainId,
 	}
 	req.ProjectId = ucloud.String(projectId)
-	req.Type = ucloud.Int(0)
+
+	req.Type = ucloud.Int(3)
+
 	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
 	req.EndTime = ucloud.Int(int(time.Now().Unix() - delayTime))
 	req.Areacode = ucloud.String("cn")
@@ -50,7 +52,9 @@ func RetrieveOriginHttpCode4xx(domainId string, projectId string, rangeTime int6
 		domainId,
 	}
 	req.ProjectId = ucloud.String(projectId)
-	req.Type = ucloud.Int(0)
+
+	req.Type = ucloud.Int(3)
+
 	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
 	req.EndTime = ucloud.Int(int(time.Now().Unix() - delayTime))
 	req.Areacode = ucloud.String("cn")
@@ -83,6 +87,25 @@ func Retrieve95BandWidth(domainId string, projectId string, rangeTime int64, del
 	return newUCdn95BandWidth
 }
 
+
+func RetrieveDomainOriginRequestNum(domainId string, projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainOriginRequestNumResponse) {
+	req := client.NewGetUcdnDomainOriginRequestNumRequest()
+	req.DomainId = []string{
+		domainId,
+	}
+	req.ProjectId = ucloud.String(projectId)
+	req.Type = ucloud.Int(3)
+	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
+	req.EndTime = ucloud.Int(int(time.Now().Unix() - delayTime))
+	req.Areacode = ucloud.String("cn")
+
+	newDomainOriginRequestNum, err := client.GetUcdnDomainOriginRequestNum(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return newDomainOriginRequestNum
+}
+
 func RetrieveInfoList(projectId string, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainInfoListResponse) {
 	req := client.NewGetUcdnDomainInfoListRequest()
 	req.ProjectId = ucloud.String(projectId)
@@ -94,3 +117,4 @@ func RetrieveInfoList(projectId string, client *ucdn.UCDNClient) (response *ucdn
 
 	return newUCdnInfoList
 }
+
