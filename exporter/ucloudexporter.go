@@ -24,6 +24,7 @@ type CdnExporter struct {
 	cdnOriginHttpCode5xx *prometheus.Desc
 	cdn95bandwidth       *prometheus.Desc
 	cdnResourceRequest   *prometheus.Desc
+
 }
 
 func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
@@ -86,6 +87,7 @@ func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, range
 			},
 			nil,
 		),
+
 		cdnResourceRequest: prometheus.NewDesc(
 			prometheus.BuildFQName(cdnNameSpace, "cdn", "resource_request"),
 			"cdn回源请求数",
@@ -94,6 +96,7 @@ func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, range
 			},
 			nil,
 		),
+
 	}
 }
 
@@ -105,6 +108,7 @@ func (e *CdnExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.cdn95bandwidth
 	ch <- e.cdnOriginHttpCode5xx
 	ch <- e.cdnResourceRequest
+
 }
 
 func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
@@ -115,6 +119,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		var flowHitRateSum float64
 		var bandWidthSum float64
 		var bandWidthAverage float64
+
 		var resourceCdnRequestSum float64
 		var resourceCdnRequestAverage float64
 		var http1xxSum int
@@ -149,6 +154,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 
 		httpData := collector.RetrieveOriginHttpCode4xx(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
 		for _, point := range httpData {
+
 			http1xxSum += point.Http1XX.Total
 			http2xxSum += point.Http2XX.Total
 			http3xxSum += point.Http3XX.Total
@@ -168,6 +174,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnRequestHitRate,
 			prometheus.GaugeValue,
@@ -209,6 +216,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 			flowHitRateAverage,
 			domain.Domain,
 		)
+
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnResourceRequest,
 			prometheus.GaugeValue,
