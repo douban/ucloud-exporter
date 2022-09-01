@@ -41,6 +41,7 @@ func main() {
 	rangeTime := flag.Int64("rangeTime", 3000, "rangeTime")
 	delayTime := flag.Int64("delayTime", 60, "delayTime")
 	tickerTime := flag.Int("tickerTime", 10, "tickerTime")
+	metricsPath := flag.String("metricsPath", "/metrics", "default metrics path")
 	flag.Parse()
 	cfg := ucloud.NewConfig()
 	cfg.BaseUrl = CONFIG_URL
@@ -71,7 +72,18 @@ func main() {
 	listenAddress := net.JoinHostPort(*host, strconv.Itoa(*port))
 	log.Println(listenAddress)
 	log.Println("Running on", listenAddress)
-	http.Handle("/metrics", promhttp.Handler()) //注册
+	http.Handle(*metricsPath, promhttp.Handler()) //注册
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html>
+             <head><title>UCloud CDN Exporter</title></head>
+             <body>
+             <h1>UCloud cdn exporter</h1>
+             <p><a href='` + *metricsPath + `'>Metrics</a></p>
+             </body>
+             </html>`))
+	})
+
 	log.Fatal(http.ListenAndServe(listenAddress, nil))
 
 }
