@@ -20,9 +20,11 @@ type CdnExporter struct {
 	cdnRequestHitRate    *prometheus.Desc
 	cdnFlowHitRate       *prometheus.Desc
 	cdnBandWidth         *prometheus.Desc
-	cdnOriginHttpCode4xx *prometheus.Desc
-	cdnOriginHttpCode5xx *prometheus.Desc
 	cdn95bandwidth       *prometheus.Desc
+	cdnOriginBandwidth   *prometheus.Desc
+	cdnRequestNum        *prometheus.Desc
+	cdnOriginRequestNum  *prometheus.Desc
+	cdnHttpCode          *prometheus.Desc
 }
 
 func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
@@ -33,8 +35,17 @@ func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, range
 		delayTime:  delayTime,
 		projectId:  projectId,
 		cdnRequestHitRate: prometheus.NewDesc(
-			prometheus.BuildFQName(cdnNameSpace, "cdn", "request_hit_rate"),
+			prometheus.BuildFQName(cdnNameSpace, "cdn", "hit_rate"),
 			"总请求命中率(%)",
+			[]string{
+				"instanceId",
+			},
+			nil,
+		),
+
+		cdnFlowHitRate: prometheus.NewDesc(
+			prometheus.BuildFQName(cdnNameSpace, "cdn", "flux_hit_rate"),
+			"总流量命中率(%)",
 			[]string{
 				"instanceId",
 			},
@@ -50,24 +61,6 @@ func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, range
 			nil,
 		),
 
-		cdnOriginHttpCode4xx: prometheus.NewDesc(
-			prometheus.BuildFQName(cdnNameSpace, "cdn", "http_code_4XX"),
-			"http4XX请求数(Count)",
-			[]string{
-				"instanceId",
-			},
-			nil,
-		),
-
-		cdnOriginHttpCode5xx: prometheus.NewDesc(
-			prometheus.BuildFQName(cdnNameSpace, "cdn", "http_code_5XX"),
-			"http5XX请求数(Count)",
-			[]string{
-				"instanceId",
-			},
-			nil,
-		),
-
 		cdn95bandwidth: prometheus.NewDesc(
 			prometheus.BuildFQName(cdnNameSpace, "cdn", "95_band_width"),
 			"95带宽数据(Mbps)",
@@ -77,11 +70,39 @@ func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, range
 			nil,
 		),
 
-		cdnFlowHitRate: prometheus.NewDesc(
-			prometheus.BuildFQName(cdnNameSpace, "cdn", "flow_hit_rate"),
-			"总流量命中率(%)",
+		cdnOriginBandwidth: prometheus.NewDesc(
+			prometheus.BuildFQName(cdnNameSpace, "cdn", "backsource_band_width"),
+			"回源带宽数据(Mbps)",
 			[]string{
 				"instanceId",
+			},
+			nil,
+		),
+
+		cdnRequestNum:  prometheus.NewDesc(
+			prometheus.BuildFQName(cdnNameSpace, "cdn", "request_num"),
+			"请求数(Count)",
+			[]string{
+				"instanceId",
+			},
+			nil,
+		),
+
+		cdnOriginRequestNum:  prometheus.NewDesc(
+			prometheus.BuildFQName(cdnNameSpace, "cdn", "backsource_request_num"),
+			"回源请求数(Count)",
+			[]string{
+				"instanceId",
+			},
+			nil,
+		),
+
+		cdnHttpCode: prometheus.NewDesc(
+			prometheus.BuildFQName(cdnNameSpace, "cdn", "http_code"),
+			"http状态码占比(%)",
+			[]string{
+				"instanceId",
+				"status",
 			},
 			nil,
 		),
@@ -92,58 +113,126 @@ func (e *CdnExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.cdnRequestHitRate
 	ch <- e.cdnFlowHitRate
 	ch <- e.cdnBandWidth
-	ch <- e.cdnOriginHttpCode4xx
 	ch <- e.cdn95bandwidth
-	ch <- e.cdnOriginHttpCode5xx
+	ch <- e.cdnOriginBandwidth
+	ch <- e.cdnRequestNum
+	ch <- e.cdnOriginRequestNum
+	ch <- e.cdnHttpCode
 }
 
 func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 
 	for _, domain := range *e.domainList {
 
-		var requestHitRateSum float64
-		var flowHitRateSum float64
-		var bandWidthSum float64
-		var bandWidthAverage float64
-		var http4xxSum int
-		var http5xxSum int
-		var http4xxAverage int
-		var http5xxAverage int
+		var (
+			requestHitRateSum       float64
+			flowHitRateSum          float64
+			bandWidthSum            float64
+			bandWidthAverage        float64
+			originBandWidthSum      float64
+			originBandWidthAverage  float64
+			requestNumSum           float64
+			requestNumAverage       float64
+			originRequestNumSum     float64
+			originRequestNumAverage float64
+			http1xxSum              int
+			http2xxSum              int
+			http3xxSum              int
+			http4xxSum              int
+			http5xxSum              int
+			http6xxSum              int
+			httpAverage             int
+		)
 
 		hitRateData := collector.RetrieveHitRate(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
-		for _, point := range hitRateData {
+		// hitRateList 去掉最后两组数值不准确的数据，影响平均值计算，其他指标的原因相同
+		// 示例：[{97.77 98.16 1662441600} {97.66 98.13 1662441900} {97.51 98.13 1662442200} {97.45 98.13 1662442500} {97.67 98.14 1662442800} {97.45 98.06 1662443100} {97.49 98.09 1662443400} {73.24 83.58 1662443700} {0 0 1662444000}]
+		validHitRate := hitRateData[:len(hitRateData)-2]
+		for _, point := range validHitRate {
 			flowHitRateSum += point.FlowHitRate
 			requestHitRateSum += point.RequestHitRate
 		}
-		flowHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateSum/float64(len(hitRateData))), 64)
+		flowHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateSum/float64(len(validHitRate))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
-		requestHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateSum/float64(len(hitRateData))), 64)
-		if err != nil {
-			log.Fatal(err)
-		}
-		bandWidthData := collector.RetrieveBandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList
-		for _, point := range bandWidthData {
-			bandWidthSum += point.CdnBandwidth
-		}
-		bandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthSum/float64(len(bandWidthData))), 64)
+		requestHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateSum/float64(len(validHitRate))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		httpData := collector.RetrieveOriginHttpCode4xx(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
-		for _, point := range httpData {
+		bandWidthData := collector.RetrieveBandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthTrafficList
+		validBandWidth := bandWidthData[:len(bandWidthData)-2]
+		for _, point := range validBandWidth {
+			bandWidthSum += point.CdnBandwidth
+		}
+		bandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthSum/float64(len(validBandWidth))), 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		originBandWidth := collector.RetrieveOriginBandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList
+		validOriginBandWidth := originBandWidth[:len(originBandWidth)-2]
+		for _, point := range validOriginBandWidth {
+			originBandWidthSum += point.Bandwidth
+		}
+		originBandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", originBandWidthSum/float64(len(validOriginBandWidth))), 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		requestNum := collector.RetrieveRequestNum(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).RequestList
+		validRequestNum := requestNum[:len(requestNum)-2]
+		for _, point := range validRequestNum{
+			requestNumSum += point.CdnRequest
+		}
+		requestNumAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", requestNumSum/float64(len(validRequestNum))), 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		originRequestNum := collector.RetrieveOriginRequestNum(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).RequestList
+		validOriginRequestNum := originRequestNum[:len(originRequestNum)-2]
+		for _, point := range validOriginRequestNum{
+			originRequestNumSum += point.CdnRequest
+		}
+		originRequestNumAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", originRequestNumSum/float64(len(validOriginRequestNum))), 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		httpData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
+		validHttpData := httpData[:len(httpData)-2]
+		for _, point := range validHttpData {
+			http1xxSum += point.Http1XX.Total
+			http2xxSum += point.Http2XX.Total
+			http3xxSum += point.Http3XX.Total
 			http4xxSum += point.Http4XX.Total
 			http5xxSum += point.Http5XX.Total
+			http6xxSum += point.Http6XX.Total
 		}
-		http4xxAverage = http4xxSum / len(httpData)
-		http5xxAverage = http5xxSum / len(httpData)
+		httpStatusCodes := make(map[string]int)
+		httpStatusCodes["1xx"] = http1xxSum / len(validHttpData)
+		httpStatusCodes["2xx"] = http2xxSum / len(validHttpData)
+		httpStatusCodes["3xx"] = http3xxSum / len(validHttpData)
+		httpStatusCodes["4xx"] = http4xxSum / len(validHttpData)
+		httpStatusCodes["5xx"] = http5xxSum / len(validHttpData)
+		httpStatusCodes["6xx"] = http6xxSum / len(validHttpData)
+		for _, sum := range httpStatusCodes{
+			httpAverage += sum
+		}
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnRequestHitRate,
 			prometheus.GaugeValue,
 			requestHitRateAverage,
+			domain.Domain,
+		)
+
+		ch <- prometheus.MustNewConstMetric(
+			e.cdnFlowHitRate,
+			prometheus.GaugeValue,
+			flowHitRateAverage,
 			domain.Domain,
 		)
 
@@ -155,20 +244,6 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		)
 
 		ch <- prometheus.MustNewConstMetric(
-			e.cdnOriginHttpCode4xx,
-			prometheus.GaugeValue,
-			float64(http4xxAverage),
-			domain.Domain,
-		)
-
-		ch <- prometheus.MustNewConstMetric(
-			e.cdnOriginHttpCode5xx,
-			prometheus.GaugeValue,
-			float64(http5xxAverage),
-			domain.Domain,
-		)
-
-		ch <- prometheus.MustNewConstMetric(
 			e.cdn95bandwidth,
 			prometheus.GaugeValue,
 			collector.Retrieve95BandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).CdnBandwidth,
@@ -176,11 +251,39 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		)
 
 		ch <- prometheus.MustNewConstMetric(
-			e.cdnFlowHitRate,
+			e.cdnOriginBandwidth,
 			prometheus.GaugeValue,
-			flowHitRateAverage,
+			originBandWidthAverage,
 			domain.Domain,
 		)
+
+		ch <- prometheus.MustNewConstMetric(
+			e.cdnRequestNum,
+			prometheus.GaugeValue,
+			requestNumAverage,
+			domain.Domain,
+		)
+
+		ch <- prometheus.MustNewConstMetric(
+			e.cdnOriginRequestNum,
+			prometheus.GaugeValue,
+			originRequestNumAverage,
+			domain.Domain,
+		)
+
+		for status, num := range httpStatusCodes {
+			proportion, err := strconv.ParseFloat(fmt.Sprintf("%.2f", float64(num) / float64(httpAverage) * 100), 64)
+			if err != nil {
+				log.Fatal(err)
+			}
+			ch <- prometheus.MustNewConstMetric(
+				e.cdnHttpCode,
+				prometheus.GaugeValue,
+				proportion,
+				domain.Domain,
+				status,
+			)
+		}
 	}
 
 }
