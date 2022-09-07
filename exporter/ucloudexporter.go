@@ -147,63 +147,57 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		hitRateData := collector.RetrieveHitRate(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
 		// hitRateList 去掉最后两组数值不准确的数据，影响平均值计算，其他指标的原因相同
 		// 示例：[{97.77 98.16 1662441600} {97.66 98.13 1662441900} {97.51 98.13 1662442200} {97.45 98.13 1662442500} {97.67 98.14 1662442800} {97.45 98.06 1662443100} {97.49 98.09 1662443400} {73.24 83.58 1662443700} {0 0 1662444000}]
-		validHitRate := hitRateData[:len(hitRateData)-2]
-		for _, point := range validHitRate {
+		for _, point := range hitRateData {
 			flowHitRateSum += point.FlowHitRate
 			requestHitRateSum += point.RequestHitRate
 		}
-		flowHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateSum/float64(len(validHitRate))), 64)
+		flowHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", flowHitRateSum/float64(len(hitRateData))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
-		requestHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateSum/float64(len(validHitRate))), 64)
+		requestHitRateAverage, err := strconv.ParseFloat(fmt.Sprintf("%.2f", requestHitRateSum/float64(len(hitRateData))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		bandWidthData := collector.RetrieveBandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthTrafficList
-		validBandWidth := bandWidthData[:len(bandWidthData)-2]
-		for _, point := range validBandWidth {
+		for _, point := range bandWidthData {
 			bandWidthSum += point.CdnBandwidth
 		}
-		bandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthSum/float64(len(validBandWidth))), 64)
+		bandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", bandWidthSum/float64(len(bandWidthData))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		originBandWidth := collector.RetrieveOriginBandWidth(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).BandwidthList
-		validOriginBandWidth := originBandWidth[:len(originBandWidth)-2]
-		for _, point := range validOriginBandWidth {
+		for _, point := range originBandWidth {
 			originBandWidthSum += point.Bandwidth
 		}
-		originBandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", originBandWidthSum/float64(len(validOriginBandWidth))), 64)
+		originBandWidthAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", originBandWidthSum/float64(len(originBandWidth))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		requestNum := collector.RetrieveRequestNum(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).RequestList
-		validRequestNum := requestNum[:len(requestNum)-2]
-		for _, point := range validRequestNum{
+		for _, point := range requestNum{
 			requestNumSum += point.CdnRequest
 		}
-		requestNumAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", requestNumSum/float64(len(validRequestNum))), 64)
+		requestNumAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", requestNumSum/float64(len(requestNum))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		originRequestNum := collector.RetrieveOriginRequestNum(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).RequestList
-		validOriginRequestNum := originRequestNum[:len(originRequestNum)-2]
-		for _, point := range validOriginRequestNum{
+		for _, point := range originRequestNum{
 			originRequestNumSum += point.CdnRequest
 		}
-		originRequestNumAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", originRequestNumSum/float64(len(validOriginRequestNum))), 64)
+		originRequestNumAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", originRequestNumSum/float64(len(originRequestNum))), 64)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		httpData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
-		validHttpData := httpData[:len(httpData)-2]
-		for _, point := range validHttpData {
+		for _, point := range httpData {
 			http1xxSum += point.Http1XX.Total
 			http2xxSum += point.Http2XX.Total
 			http3xxSum += point.Http3XX.Total
@@ -212,12 +206,12 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 			http6xxSum += point.Http6XX.Total
 		}
 		httpStatusCodes := make(map[string]int)
-		httpStatusCodes["1xx"] = http1xxSum / len(validHttpData)
-		httpStatusCodes["2xx"] = http2xxSum / len(validHttpData)
-		httpStatusCodes["3xx"] = http3xxSum / len(validHttpData)
-		httpStatusCodes["4xx"] = http4xxSum / len(validHttpData)
-		httpStatusCodes["5xx"] = http5xxSum / len(validHttpData)
-		httpStatusCodes["6xx"] = http6xxSum / len(validHttpData)
+		httpStatusCodes["1xx"] = http1xxSum / len(httpData)
+		httpStatusCodes["2xx"] = http2xxSum / len(httpData)
+		httpStatusCodes["3xx"] = http3xxSum / len(httpData)
+		httpStatusCodes["4xx"] = http4xxSum / len(httpData)
+		httpStatusCodes["5xx"] = http5xxSum / len(httpData)
+		httpStatusCodes["6xx"] = http6xxSum / len(httpData)
 		for _, sum := range httpStatusCodes{
 			httpAverage += sum
 		}
