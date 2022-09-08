@@ -39,7 +39,7 @@ func main() {
 	host := flag.String("host", "0.0.0.0", "服务监听地址")
 	port := flag.Int("port", 9200, "服务监听端口")
 	rangeTime := flag.Int64("rangeTime", 3000, "rangeTime")
-	delayTime := flag.Int64("delayTime", 60, "delayTime")
+	delayTime := flag.Int64("delayTime", 600, "delayTime")
 	tickerTime := flag.Int("tickerTime", 10, "tickerTime")
 	metricsPath := flag.String("metricsPath", "/metrics", "default metrics path")
 	flag.Parse()
