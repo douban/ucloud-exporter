@@ -112,7 +112,8 @@ func RetrieveOriginRequestNum(domainId string, projectId string, rangeTime int64
 	return originRequestNum
 }
 
-func RetrieveHttpCode(domainId string, projectId string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainHttpCodeV2Response) {
+func RetrieveHttpCode(domainId string, projectId string, layer string, rangeTime int64, delayTime int64, client *ucdn.UCDNClient) (response *ucdn.GetUcdnDomainHttpCodeV2Response) {
+	// layer 指定获取的状态码是边缘还是上层 edge 表示边缘 layer 表示上层
 	req := client.NewGetUcdnDomainHttpCodeV2Request()
 	req.DomainId = []string{
 		domainId,
@@ -121,6 +122,7 @@ func RetrieveHttpCode(domainId string, projectId string, rangeTime int64, delayT
 	req.Type = ucloud.Int(0)
 	req.BeginTime = ucloud.Int(int(time.Now().Unix() - rangeTime))
 	req.EndTime = ucloud.Int(int(time.Now().Unix() - delayTime))
+	req.Layer = ucloud.String(layer)
 	req.Areacode = ucloud.String("cn")
 
 	newUCdnRequestStatusNum, err := client.GetUcdnDomainHttpCodeV2(req)

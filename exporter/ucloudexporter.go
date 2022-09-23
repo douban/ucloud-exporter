@@ -25,6 +25,7 @@ type CdnExporter struct {
 	cdnRequestNum        *prometheus.Desc
 	cdnOriginRequestNum  *prometheus.Desc
 	cdnHttpCode          *prometheus.Desc
+	cdnBackSourceCode    *prometheus.Desc
 }
 
 func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
@@ -106,6 +107,16 @@ func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, range
 			},
 			nil,
 		),
+
+		cdnBackSourceCode: prometheus.NewDesc(
+			prometheus.BuildFQName(cdnNameSpace, "cdn", "backsource_code"),
+			"http回源状态码占比(%)",
+			[]string{
+				"instanceId",
+				"status",
+			},
+			nil,
+		),
 	}
 }
 
@@ -118,6 +129,7 @@ func (e *CdnExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.cdnRequestNum
 	ch <- e.cdnOriginRequestNum
 	ch <- e.cdnHttpCode
+	ch <- e.cdnBackSourceCode
 }
 
 func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
@@ -135,13 +147,32 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 			requestNumAverage       float64
 			originRequestNumSum     float64
 			originRequestNumAverage float64
-			http1xxSum              int
-			http2xxSum              int
-			http3xxSum              int
-			http4xxSum              int
-			http5xxSum              int
-			http6xxSum              int
-			httpAverage             int
+			codeTotal      int
+			code200Total   int
+			code206Total   int
+			code301Total   int
+			code302Total   int
+			code304Total   int
+			code400Total   int
+			code403Total   int
+			code404Total   int
+			code500Total   int
+			code502Total   int
+			code503Total   int
+			code504Total   int
+			resourceCodeTotal      int
+			resourceCode200Total   int
+			resourceCode206Total   int
+			resourceCode301Total   int
+			resourceCode302Total   int
+			resourceCode304Total   int
+			resourceCode400Total   int
+			resourceCode403Total   int
+			resourceCode404Total   int
+			resourceCode500Total   int
+			resourceCode502Total   int
+			resourceCode503Total   int
+			resourceCode504Total   int
 		)
 
 		hitRateData := collector.RetrieveHitRate(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
@@ -196,25 +227,76 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 			log.Fatal(err)
 		}
 
-		httpData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HttpCodeDetail
+		httpData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, "edge", e.rangeTime, e.delayTime, e.client).HttpCodeDetail
 		for _, point := range httpData {
-			http1xxSum += point.Http1XX.Total
-			http2xxSum += point.Http2XX.Total
-			http3xxSum += point.Http3XX.Total
-			http4xxSum += point.Http4XX.Total
-			http5xxSum += point.Http5XX.Total
-			http6xxSum += point.Http6XX.Total
+			code200Total += point.Http2XX.Http200
+			code206Total += point.Http2XX.Http206
+			code301Total += point.Http3XX.Http301
+			code302Total += point.Http3XX.Http302
+			code304Total += point.Http3XX.Http304
+			code400Total += point.Http4XX.Http400
+			code403Total += point.Http4XX.Http403
+			code404Total += point.Http4XX.Http404
+			code500Total += point.Http5XX.Http500
+			code502Total += point.Http5XX.Http502
+			code503Total += point.Http5XX.Http503
+			code504Total += point.Http5XX.Http504
 		}
-		httpStatusCodes := make(map[string]int)
-		httpStatusCodes["1xx"] = http1xxSum / len(httpData)
-		httpStatusCodes["2xx"] = http2xxSum / len(httpData)
-		httpStatusCodes["3xx"] = http3xxSum / len(httpData)
-		httpStatusCodes["4xx"] = http4xxSum / len(httpData)
-		httpStatusCodes["5xx"] = http5xxSum / len(httpData)
-		httpStatusCodes["6xx"] = http6xxSum / len(httpData)
-		for _, sum := range httpStatusCodes{
-			httpAverage += sum
+		codeTotal = code200Total + code206Total + code301Total + code302Total + code304Total + code400Total +
+			code403Total + code404Total + code500Total + code502Total + code503Total + code504Total
+		httpStatusCodes := make(map[string]float64)
+		httpStatusCodes["200"] = float64(code200Total) / float64(codeTotal)
+		httpStatusCodes["206"] = float64(code206Total) / float64(codeTotal)
+		httpStatusCodes["2xx"] = float64(code200Total + code206Total) / float64(codeTotal)
+		httpStatusCodes["301"] = float64(code301Total) / float64(codeTotal)
+		httpStatusCodes["302"] = float64(code302Total) / float64(codeTotal)
+		httpStatusCodes["304"] = float64(code304Total) / float64(codeTotal)
+		httpStatusCodes["3xx"] = float64(code301Total + code302Total + code304Total) / float64(codeTotal)
+		httpStatusCodes["400"] = float64(code400Total) / float64(codeTotal)
+		httpStatusCodes["403"] = float64(code403Total) / float64(codeTotal)
+		httpStatusCodes["404"] = float64(code404Total) / float64(codeTotal)
+		httpStatusCodes["4xx"] = float64(code400Total + code403Total + code404Total) / float64(codeTotal)
+		httpStatusCodes["500"] = float64(code500Total) / float64(codeTotal)
+		httpStatusCodes["502"] = float64(code502Total) / float64(codeTotal)
+		httpStatusCodes["503"] = float64(code503Total) / float64(codeTotal)
+		httpStatusCodes["504"] = float64(code504Total) / float64(codeTotal)
+		httpStatusCodes["5xx"] = float64(code500Total + code502Total + code503Total + code504Total) / float64(codeTotal)
+
+		backSourceCodeData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, "layer", e.rangeTime, e.delayTime, e.client).HttpCodeDetail
+		for _, point := range backSourceCodeData {
+			resourceCode200Total += point.Http2XX.Http200
+			resourceCode206Total += point.Http2XX.Http206
+			resourceCode301Total += point.Http3XX.Http301
+			resourceCode302Total += point.Http3XX.Http302
+			resourceCode304Total += point.Http3XX.Http304
+			resourceCode400Total += point.Http4XX.Http400
+			resourceCode403Total += point.Http4XX.Http403
+			resourceCode404Total += point.Http4XX.Http404
+			resourceCode500Total += point.Http5XX.Http500
+			resourceCode502Total += point.Http5XX.Http502
+			resourceCode503Total += point.Http5XX.Http503
+			resourceCode504Total += point.Http5XX.Http504
 		}
+		resourceCodeTotal = resourceCode200Total + resourceCode206Total + resourceCode301Total + resourceCode302Total +
+			resourceCode304Total + resourceCode400Total + resourceCode403Total + resourceCode404Total +
+			resourceCode500Total + resourceCode502Total + resourceCode503Total + resourceCode504Total
+		backSourceStatusCodes := make(map[string]float64)
+		backSourceStatusCodes["200"] = float64(resourceCode200Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["206"] = float64(resourceCode206Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["2xx"] = float64(resourceCode200Total + resourceCode206Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["301"] = float64(resourceCode301Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["302"] = float64(resourceCode302Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["304"] = float64(resourceCode304Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["3xx"] = float64(resourceCode301Total + resourceCode302Total + resourceCode304Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["400"] = float64(resourceCode400Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["403"] = float64(resourceCode403Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["404"] = float64(resourceCode404Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["4xx"] = float64(resourceCode400Total + resourceCode403Total + resourceCode404Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["500"] = float64(resourceCode500Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["502"] = float64(resourceCode502Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["503"] = float64(resourceCode503Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["504"] = float64(resourceCode504Total) / float64(resourceCodeTotal)
+		backSourceStatusCodes["5xx"] = float64(resourceCode500Total + resourceCode502Total + resourceCode503Total + resourceCode504Total) / float64(resourceCodeTotal)
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnRequestHitRate,
@@ -265,13 +347,27 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 			domain.Domain,
 		)
 
-		for status, num := range httpStatusCodes {
-			proportion, err := strconv.ParseFloat(fmt.Sprintf("%.2f", float64(num) / float64(httpAverage) * 100), 64)
+		for status, rate := range httpStatusCodes {
+			proportion, err := strconv.ParseFloat(fmt.Sprintf("%.3f", rate * 100), 64)
 			if err != nil {
 				log.Fatal(err)
 			}
 			ch <- prometheus.MustNewConstMetric(
 				e.cdnHttpCode,
+				prometheus.GaugeValue,
+				proportion,
+				domain.Domain,
+				status,
+			)
+		}
+
+		for status, rate := range backSourceStatusCodes {
+			proportion, err := strconv.ParseFloat(fmt.Sprintf("%.3f", rate * 100), 64)
+			if err != nil {
+				log.Fatal(err)
+			}
+			ch <- prometheus.MustNewConstMetric(
+				e.cdnBackSourceCode,
 				prometheus.GaugeValue,
 				proportion,
 				domain.Domain,
