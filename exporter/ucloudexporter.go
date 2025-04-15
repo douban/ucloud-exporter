@@ -5,6 +5,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/ucloud/ucloud-sdk-go/services/ucdn"
 	"log"
+	"reflect"
+	"regexp"
 	"strconv"
 	"ucloud-exporter/collector"
 )
@@ -12,20 +14,20 @@ import (
 const cdnNameSpace = "uCloud"
 
 type CdnExporter struct {
-	client               *ucdn.UCDNClient
-	domainList           *[]ucdn.DomainBaseInfo
-	rangeTime            int64
-	delayTime            int64
-	projectId            string
-	cdnRequestHitRate    *prometheus.Desc
-	cdnFlowHitRate       *prometheus.Desc
-	cdnBandWidth         *prometheus.Desc
-	cdn95bandwidth       *prometheus.Desc
-	cdnOriginBandwidth   *prometheus.Desc
-	cdnRequestNum        *prometheus.Desc
-	cdnOriginRequestNum  *prometheus.Desc
-	cdnHttpCode          *prometheus.Desc
-	cdnBackSourceCode    *prometheus.Desc
+	client              *ucdn.UCDNClient
+	domainList          *[]ucdn.DomainBaseInfo
+	rangeTime           int64
+	delayTime           int64
+	projectId           string
+	cdnRequestHitRate   *prometheus.Desc
+	cdnFlowHitRate      *prometheus.Desc
+	cdnBandWidth        *prometheus.Desc
+	cdn95bandwidth      *prometheus.Desc
+	cdnOriginBandwidth  *prometheus.Desc
+	cdnRequestNum       *prometheus.Desc
+	cdnOriginRequestNum *prometheus.Desc
+	cdnHttpCode         *prometheus.Desc
+	cdnBackSourceCode   *prometheus.Desc
 }
 
 func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, rangeTime int64, delayTime int64, c *ucdn.UCDNClient) *CdnExporter {
@@ -80,7 +82,7 @@ func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, range
 			nil,
 		),
 
-		cdnRequestNum:  prometheus.NewDesc(
+		cdnRequestNum: prometheus.NewDesc(
 			prometheus.BuildFQName(cdnNameSpace, "cdn", "request_num"),
 			"请求数(Count)",
 			[]string{
@@ -89,7 +91,7 @@ func CdnCloudExporter(domainList *[]ucdn.DomainBaseInfo, projectId string, range
 			nil,
 		),
 
-		cdnOriginRequestNum:  prometheus.NewDesc(
+		cdnOriginRequestNum: prometheus.NewDesc(
 			prometheus.BuildFQName(cdnNameSpace, "cdn", "backsource_request_num"),
 			"回源请求数(Count)",
 			[]string{
@@ -147,32 +149,10 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 			requestNumAverage       float64
 			originRequestNumSum     float64
 			originRequestNumAverage float64
-			codeTotal      int
-			code200Total   int
-			code206Total   int
-			code301Total   int
-			code302Total   int
-			code304Total   int
-			code400Total   int
-			code403Total   int
-			code404Total   int
-			code500Total   int
-			code502Total   int
-			code503Total   int
-			code504Total   int
-			resourceCodeTotal      int
-			resourceCode200Total   int
-			resourceCode206Total   int
-			resourceCode301Total   int
-			resourceCode302Total   int
-			resourceCode304Total   int
-			resourceCode400Total   int
-			resourceCode403Total   int
-			resourceCode404Total   int
-			resourceCode500Total   int
-			resourceCode502Total   int
-			resourceCode503Total   int
-			resourceCode504Total   int
+			codeTotal               int
+			resourceCodeTotal       int
+			httpStatusCodes         map[string]float64
+			backSourceStatusCodes   map[string]float64
 		)
 
 		hitRateData := collector.RetrieveHitRate(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
@@ -210,7 +190,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		requestNum := collector.RetrieveRequestNum(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).RequestList
-		for _, point := range requestNum{
+		for _, point := range requestNum {
 			requestNumSum += point.CdnRequest
 		}
 		requestNumAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", requestNumSum/float64(len(requestNum))), 64)
@@ -219,7 +199,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		originRequestNum := collector.RetrieveOriginRequestNum(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).RequestList
-		for _, point := range originRequestNum{
+		for _, point := range originRequestNum {
 			originRequestNumSum += point.CdnRequest
 		}
 		originRequestNumAverage, err = strconv.ParseFloat(fmt.Sprintf("%.2f", originRequestNumSum/float64(len(originRequestNum))), 64)
@@ -229,74 +209,63 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 
 		httpData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, "edge", e.rangeTime, e.delayTime, e.client).HttpCodeDetail
 		for _, point := range httpData {
-			code200Total += point.Http2XX.Http200
-			code206Total += point.Http2XX.Http206
-			code301Total += point.Http3XX.Http301
-			code302Total += point.Http3XX.Http302
-			code304Total += point.Http3XX.Http304
-			code400Total += point.Http4XX.Http400
-			code403Total += point.Http4XX.Http403
-			code404Total += point.Http4XX.Http404
-			code500Total += point.Http5XX.Http500
-			code502Total += point.Http5XX.Http502
-			code503Total += point.Http5XX.Http503
-			code504Total += point.Http5XX.Http504
+			codeTotal += point.Http2XX.Total + point.Http3XX.Total +
+				point.Http4XX.Total + point.Http5XX.Total
+			httpStatusCodes["2xx"] += float64(point.Http2XX.Total)
+			httpStatusCodes["3xx"] += float64(point.Http3XX.Total)
+			httpStatusCodes["4xx"] += float64(point.Http4XX.Total)
+			httpStatusCodes["5xx"] += float64(point.Http5XX.Total)
+			pointValue := reflect.ValueOf(point)
+			for i := 0; i < pointValue.NumField(); i++ {
+				fieldValue := pointValue.Field(i)
+				if fieldValue.Kind() == reflect.Struct {
+					for j := 0; j < fieldValue.NumField(); j++ {
+						subField := fieldValue.Type().Field(j)
+						subFieldValue := fieldValue.Field(j)
+						if subFieldValue.Int() == 0 {
+							continue
+						}
+						statusCode := regexp.MustCompile(`\d+`).FindString(subField.Name)
+						if statusCode != "" {
+							httpStatusCodes[statusCode] += float64(subFieldValue.Int())
+						}
+					}
+				}
+			}
 		}
-		codeTotal = code200Total + code206Total + code301Total + code302Total + code304Total + code400Total +
-			code403Total + code404Total + code500Total + code502Total + code503Total + code504Total
-		httpStatusCodes := make(map[string]float64)
-		httpStatusCodes["200"] = float64(code200Total) / float64(codeTotal)
-		httpStatusCodes["206"] = float64(code206Total) / float64(codeTotal)
-		httpStatusCodes["2xx"] = float64(code200Total + code206Total) / float64(codeTotal)
-		httpStatusCodes["301"] = float64(code301Total) / float64(codeTotal)
-		httpStatusCodes["302"] = float64(code302Total) / float64(codeTotal)
-		httpStatusCodes["304"] = float64(code304Total) / float64(codeTotal)
-		httpStatusCodes["3xx"] = float64(code301Total + code302Total + code304Total) / float64(codeTotal)
-		httpStatusCodes["400"] = float64(code400Total) / float64(codeTotal)
-		httpStatusCodes["403"] = float64(code403Total) / float64(codeTotal)
-		httpStatusCodes["404"] = float64(code404Total) / float64(codeTotal)
-		httpStatusCodes["4xx"] = float64(code400Total + code403Total + code404Total) / float64(codeTotal)
-		httpStatusCodes["500"] = float64(code500Total) / float64(codeTotal)
-		httpStatusCodes["502"] = float64(code502Total) / float64(codeTotal)
-		httpStatusCodes["503"] = float64(code503Total) / float64(codeTotal)
-		httpStatusCodes["504"] = float64(code504Total) / float64(codeTotal)
-		httpStatusCodes["5xx"] = float64(code500Total + code502Total + code503Total + code504Total) / float64(codeTotal)
+		for code, count := range httpStatusCodes {
+			httpStatusCodes[code] = count / float64(codeTotal)
+		}
 
 		backSourceCodeData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, "layer", e.rangeTime, e.delayTime, e.client).HttpCodeDetail
 		for _, point := range backSourceCodeData {
-			resourceCode200Total += point.Http2XX.Http200
-			resourceCode206Total += point.Http2XX.Http206
-			resourceCode301Total += point.Http3XX.Http301
-			resourceCode302Total += point.Http3XX.Http302
-			resourceCode304Total += point.Http3XX.Http304
-			resourceCode400Total += point.Http4XX.Http400
-			resourceCode403Total += point.Http4XX.Http403
-			resourceCode404Total += point.Http4XX.Http404
-			resourceCode500Total += point.Http5XX.Http500
-			resourceCode502Total += point.Http5XX.Http502
-			resourceCode503Total += point.Http5XX.Http503
-			resourceCode504Total += point.Http5XX.Http504
+			resourceCodeTotal += point.Http2XX.Total + point.Http3XX.Total +
+				point.Http4XX.Total + point.Http5XX.Total
+			backSourceStatusCodes["2xx"] += float64(point.Http2XX.Total)
+			backSourceStatusCodes["3xx"] += float64(point.Http3XX.Total)
+			backSourceStatusCodes["4xx"] += float64(point.Http4XX.Total)
+			backSourceStatusCodes["5xx"] += float64(point.Http5XX.Total)
+			pointValue := reflect.ValueOf(point)
+			for i := 0; i < pointValue.NumField(); i++ {
+				fieldValue := pointValue.Field(i)
+				if fieldValue.Kind() == reflect.Struct {
+					for j := 0; j < fieldValue.NumField(); j++ {
+						subField := fieldValue.Type().Field(j)
+						subFieldValue := fieldValue.Field(j)
+						if subFieldValue.Int() == 0 {
+							continue
+						}
+						statusCode := regexp.MustCompile(`\d+`).FindString(subField.Name)
+						if statusCode != "" {
+							backSourceStatusCodes[statusCode] += float64(subFieldValue.Int())
+						}
+					}
+				}
+			}
 		}
-		resourceCodeTotal = resourceCode200Total + resourceCode206Total + resourceCode301Total + resourceCode302Total +
-			resourceCode304Total + resourceCode400Total + resourceCode403Total + resourceCode404Total +
-			resourceCode500Total + resourceCode502Total + resourceCode503Total + resourceCode504Total
-		backSourceStatusCodes := make(map[string]float64)
-		backSourceStatusCodes["200"] = float64(resourceCode200Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["206"] = float64(resourceCode206Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["2xx"] = float64(resourceCode200Total + resourceCode206Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["301"] = float64(resourceCode301Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["302"] = float64(resourceCode302Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["304"] = float64(resourceCode304Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["3xx"] = float64(resourceCode301Total + resourceCode302Total + resourceCode304Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["400"] = float64(resourceCode400Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["403"] = float64(resourceCode403Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["404"] = float64(resourceCode404Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["4xx"] = float64(resourceCode400Total + resourceCode403Total + resourceCode404Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["500"] = float64(resourceCode500Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["502"] = float64(resourceCode502Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["503"] = float64(resourceCode503Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["504"] = float64(resourceCode504Total) / float64(resourceCodeTotal)
-		backSourceStatusCodes["5xx"] = float64(resourceCode500Total + resourceCode502Total + resourceCode503Total + resourceCode504Total) / float64(resourceCodeTotal)
+		for code, count := range backSourceStatusCodes {
+			backSourceStatusCodes[code] = count / float64(resourceCodeTotal)
+		}
 
 		ch <- prometheus.MustNewConstMetric(
 			e.cdnRequestHitRate,
@@ -348,7 +317,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		)
 
 		for status, rate := range httpStatusCodes {
-			proportion, err := strconv.ParseFloat(fmt.Sprintf("%.3f", rate * 100), 64)
+			proportion, err := strconv.ParseFloat(fmt.Sprintf("%.3f", rate*100), 64)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -362,7 +331,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		for status, rate := range backSourceStatusCodes {
-			proportion, err := strconv.ParseFloat(fmt.Sprintf("%.3f", rate * 100), 64)
+			proportion, err := strconv.ParseFloat(fmt.Sprintf("%.3f", rate*100), 64)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -377,4 +346,3 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 	}
 
 }
-
