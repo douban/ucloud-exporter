@@ -151,8 +151,6 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 			originRequestNumAverage float64
 			codeTotal               int
 			resourceCodeTotal       int
-			httpStatusCodes         map[string]float64
-			backSourceStatusCodes   map[string]float64
 		)
 
 		hitRateData := collector.RetrieveHitRate(domain.DomainId, e.projectId, e.rangeTime, e.delayTime, e.client).HitRateList
@@ -208,6 +206,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		httpData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, "edge", e.rangeTime, e.delayTime, e.client).HttpCodeDetail
+		httpStatusCodes := make(map[string]float64)
 		for _, point := range httpData {
 			codeTotal += point.Http2XX.Total + point.Http3XX.Total +
 				point.Http4XX.Total + point.Http5XX.Total
@@ -236,7 +235,7 @@ func (e *CdnExporter) Collect(ch chan<- prometheus.Metric) {
 		for code, count := range httpStatusCodes {
 			httpStatusCodes[code] = count / float64(codeTotal)
 		}
-
+		backSourceStatusCodes := make(map[string]float64)
 		backSourceCodeData := collector.RetrieveHttpCode(domain.DomainId, e.projectId, "layer", e.rangeTime, e.delayTime, e.client).HttpCodeDetail
 		for _, point := range backSourceCodeData {
 			resourceCodeTotal += point.Http2XX.Total + point.Http3XX.Total +
